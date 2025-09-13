@@ -1,0 +1,79 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: blog_postgres
+    environment:
+      POSTGRES_DB: blog_db
+      POSTGRES_USER: blog_user
+      POSTGRES_PASSWORD: blog_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - blog_network
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: blog_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - blog_network
+
+  # Elasticsearch
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.9.0
+    container_name: blog_elasticsearch
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - ES_JAVA_OPTS=-Xms512m -Xmx512m
+    ports:
+      - "9200:9200"
+      - "9300:9300"
+    volumes:
+      - es_data:/usr/share/elasticsearch/data
+    networks:
+      - blog_network
+
+  # Blog API Service
+  blog_api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: blog_api
+    ports:
+      - "8080:8080"
+    environment:
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USER=blog_user
+      - DB_PASSWORD=blog_password
+      - DB_NAME=blog_db
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - ES_HOST=elasticsearch
+      - ES_PORT=9200
+    depends_on:
+      - postgres
+      - redis
+      - elasticsearch
+    networks:
+      - blog_network
+
+volumes:
+  postgres_data:
+  redis_data:
+  es_data:
+
+networks:
+  blog_network:
+    driver: bridge
