@@ -7,6 +7,9 @@ A comprehensive blog API built with Golang, featuring PostgreSQL, Redis caching,
 - **PostgreSQL**: Optimized database with GIN indexing for tag searches and transaction support
 - **Redis**: Cache-Aside pattern implementation for improved read performance
 - **Elasticsearch**: Full-text search capabilities across post titles and content
+- **Related Posts**: Intelligent content discovery based on tag similarity
+- **Activity Logging**: Comprehensive system activity tracking with pagination
+- **Swagger Documentation**: Interactive API documentation with testing capabilities
 - **GORM**: Database ORM for easy data management
 - **Gin**: Fast HTTP web framework
 
@@ -54,7 +57,73 @@ curl http://localhost:9200/_cluster/health
 docker exec blog_redis redis-cli ping
 ```
 
-## API Endpoints
+**Expected Responses:**
+- API Health: `{"message":"Blog API is running","status":"OK"}`
+- Elasticsearch: `{"status":"green"}` or `{"status":"yellow"}`
+- Redis: `PONG`
+
+### 3. Quick Test
+
+Verify the API is working with a simple test:
+
+```bash
+# Create a test post
+curl -X POST http://localhost:8080/api/v1/posts \
+  -H "Content-Type: application/json" \
+  -d '{
+    "title": "Hello World",
+    "content": "My first blog post using this API!",
+    "tags": ["hello", "test", "api"]
+  }'
+
+# Get all posts
+curl http://localhost:8080/api/v1/posts
+```
+
+### 4. Access Swagger Documentation
+
+Open your browser and visit the **interactive API documentation**:
+
+**🔗 [Swagger UI](http://localhost:8080/swagger/index.html)**
+
+You can test all endpoints directly from the Swagger interface!
+
+### 4. Access Swagger Documentation
+
+The API now includes interactive Swagger documentation for easy testing:
+
+**🚀 Swagger UI: [http://localhost:8080/swagger/index.html](http://localhost:8080/swagger/index.html)**
+
+The Swagger UI provides:
+- 📋 **Complete API documentation** with request/response schemas
+- 🧪 **Interactive testing** - Try all endpoints directly from the browser
+- 📖 **Request examples** and parameter descriptions
+- 🔍 **Schema explorer** for all data models
+
+## API Documentation
+
+### Swagger UI
+
+The API includes comprehensive **Swagger/OpenAPI documentation** with an interactive UI for easy testing:
+
+**🔗 Access Swagger UI at: `http://localhost:8080/swagger/index.html`**
+
+**Features:**
+- 📋 **Complete API Reference** - All endpoints documented with examples
+- 🧪 **Interactive Testing** - Test APIs directly from the browser
+- 📝 **Request/Response Schemas** - Detailed models and examples
+- 🔍 **Parameter Documentation** - Query parameters, path parameters, and body schemas
+- ✅ **Validation Rules** - Required fields and data types clearly marked
+
+### API Endpoints
+
+### 📖 Interactive Documentation: [Swagger UI](http://localhost:8080/swagger/index.html)
+
+For the best API testing experience, use the **Swagger UI** which provides:
+- Interactive endpoint testing
+- Complete request/response schemas
+- Real-time API exploration
+- Built-in parameter validation
 
 ### Base URL: `http://localhost:8080/api/v1`
 
@@ -109,6 +178,71 @@ Performs full-text search across post titles and content.
 ```bash
 curl "http://localhost:8080/api/v1/posts/search?q=technology"
 ```
+
+### 6. Get All Posts (with Pagination)
+
+Retrieves all posts with pagination support.
+
+```bash
+# Get first page (default: 10 posts per page)
+curl "http://localhost:8080/api/v1/posts"
+
+# Get specific page with custom limit
+curl "http://localhost:8080/api/v1/posts?page=2&limit=5"
+```
+
+### 7. Related Posts (Bonus Feature)
+
+Gets a post with related posts based on tag similarity using Elasticsearch.
+
+```bash
+curl "http://localhost:8080/api/v1/posts/1/related"
+```
+
+### 8. Activity Logs (with Pagination)
+
+Retrieves system activity logs with pagination.
+
+```bash
+# Get recent activity logs
+curl "http://localhost:8080/api/v1/activity-logs"
+
+# Get specific page with custom limit
+curl "http://localhost:8080/api/v1/activity-logs?page=1&limit=10"
+```
+
+### 9. Delete Post (with Cache Invalidation)
+
+Deletes a post and cleans up related data.
+
+```bash
+curl -X DELETE "http://localhost:8080/api/v1/posts/1"
+```
+
+## Complete API Reference
+
+| Method | Endpoint | Description | Required Body |
+|--------|----------|-------------|---------------|
+| `GET` | `/health` | Health check endpoint | - |
+| `POST` | `/api/v1/posts` | Create new post | `{title, content, tags}` |
+| `GET` | `/api/v1/posts` | Get all posts (paginated) | - |
+| `GET` | `/api/v1/posts/:id` | Get specific post (cached) | - |
+| `GET` | `/api/v1/posts/:id/related` | Get post with related posts | - |
+| `PUT` | `/api/v1/posts/:id` | Update post | `{title?, content?, tags?}` |
+| `DELETE` | `/api/v1/posts/:id` | Delete post | - |
+| `GET` | `/api/v1/posts/search-by-tag?tag=<tag>` | Search by tag (GIN index) | - |
+| `GET` | `/api/v1/posts/search?q=<query>` | Full-text search | - |
+| `GET` | `/api/v1/activity-logs` | Get activity logs (paginated) | - |
+
+### Query Parameters
+
+**Pagination (for `/posts` and `/activity-logs`):**
+- `page`: Page number (default: 1)
+- `limit`: Items per page (default: 10 for posts, 20 for logs, max: 100)
+
+**Search:**
+- `tag`: Tag name for tag-based search
+- `q`: Query string for full-text search
 
 ## Testing the Implementation
 
@@ -198,6 +332,81 @@ curl "http://localhost:8080/api/v1/posts/search?q=best%20practices"
 curl "http://localhost:8080/api/v1/posts/search?q=performance"
 ```
 
+### 6. Test Related Posts Feature (Bonus)
+
+```bash
+# Create posts with overlapping tags
+curl -X POST http://localhost:8080/api/v1/posts \
+  -H "Content-Type: application/json" \
+  -d '{
+    "title": "Advanced Go Concurrency",
+    "content": "Deep dive into Go concurrency patterns and best practices.",
+    "tags": ["golang", "concurrency", "advanced"]
+  }'
+
+curl -X POST http://localhost:8080/api/v1/posts \
+  -H "Content-Type: application/json" \
+  -d '{
+    "title": "Go Channels Guide",
+    "content": "Complete guide to using channels in Go programming.",
+    "tags": ["golang", "channels", "programming"]
+  }'
+
+# Wait for Elasticsearch indexing
+sleep 3
+
+# Test related posts (should find posts with similar tags)
+curl "http://localhost:8080/api/v1/posts/1/related"
+```
+
+### 7. Test Activity Logs
+
+```bash
+# View activity logs (shows post creation, deletion activities)
+curl "http://localhost:8080/api/v1/activity-logs"
+
+# View with pagination
+curl "http://localhost:8080/api/v1/activity-logs?page=1&limit=5"
+```
+
+### 8. Test Complete Workflow
+
+```bash
+# 1. Create a post
+POST_ID=$(curl -s -X POST http://localhost:8080/api/v1/posts \
+  -H "Content-Type: application/json" \
+  -d '{
+    "title": "Workflow Test Post",
+    "content": "Testing the complete API workflow.",
+    "tags": ["test", "workflow", "api"]
+  }' | jq -r '.id')
+
+echo "Created post with ID: $POST_ID"
+
+# 2. Get the post (cache miss)
+curl "http://localhost:8080/api/v1/posts/$POST_ID"
+
+# 3. Get again (cache hit)
+curl "http://localhost:8080/api/v1/posts/$POST_ID"
+
+# 4. Update the post (invalidates cache)
+curl -X PUT "http://localhost:8080/api/v1/posts/$POST_ID" \
+  -H "Content-Type: application/json" \
+  -d '{"title": "Updated Workflow Test"}'
+
+# 5. Search by tag
+curl "http://localhost:8080/api/v1/posts/search-by-tag?tag=workflow"
+
+# 6. Full-text search
+curl "http://localhost:8080/api/v1/posts/search?q=workflow"
+
+# 7. Get related posts
+curl "http://localhost:8080/api/v1/posts/$POST_ID/related"
+
+# 8. View activity logs
+curl "http://localhost:8080/api/v1/activity-logs?limit=3"
+```
+
 ## Database Schema
 
 ### Posts Table
@@ -230,10 +439,12 @@ CREATE TABLE activity_logs (
 ## Performance Features
 
 1. **GIN Index**: Fast tag-based searches using PostgreSQL's GIN indexing
-2. **Redis Caching**: 5-minute TTL cache for post retrieval
-3. **Cache Invalidation**: Automatic cache clearing on updates
-4. **Transaction Safety**: ACID compliance for post creation and logging
-5. **Elasticsearch**: Fast full-text search with fuzzy matching
+2. **Redis Caching**: 5-minute TTL cache for post retrieval with Cache-Aside pattern
+3. **Cache Invalidation**: Automatic cache clearing on updates and deletes
+4. **Transaction Safety**: ACID compliance for post creation and activity logging
+5. **Elasticsearch**: Fast full-text search with fuzzy matching and related posts discovery
+6. **Optimized Pagination**: Efficient pagination with metadata for all list endpoints
+7. **Async Processing**: Background indexing for Elasticsearch operations
 
 ## Development
 
@@ -302,13 +513,23 @@ docker-compose logs redis
 docker-compose logs elasticsearch
 ```
 
-## Next Steps (Bonus Features)
+## Next Steps (Additional Enhancements)
 
-The project is ready for implementing the bonus "Related Posts" feature:
+The project is **COMPLETE** with all required features implemented, including the bonus "Related Posts" feature:
 
-- Elasticsearch bool queries with should clauses
-- Tag-based similarity matching
-- Exclusion of the current post from results
+✅ **Implemented Features:**
+- Elasticsearch bool queries with should clauses for related posts
+- Tag-based similarity matching with exclusion of current post
+- Activity logs with comprehensive pagination
+- Advanced caching strategies with proper invalidation
+
+**Potential Future Enhancements:**
+- User authentication and authorization (JWT)
+- Comment system for posts  
+- File upload capabilities for post attachments
+- Real-time notifications with WebSockets
+- API rate limiting and security enhancements
+- Advanced analytics and reporting
 
 ## License
 

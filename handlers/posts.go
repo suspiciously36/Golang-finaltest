@@ -9,12 +9,21 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/lib/pq"
 	"github.com/olivere/elastic/v7"
 	"github.com/susbuntu/blog-api/models"
 )
 
 // CreatePost handles POST /posts - Creates a new post with transaction support
+// @Summary Create a new blog post
+// @Description Create a new blog post with transaction support for data integrity
+// @Tags posts
+// @Accept json
+// @Produce json
+// @Param post body models.CreatePostRequest true "Post creation request"
+// @Success 201 {object} models.Post
+// @Failure 400 {object} models.ErrorResponse
+// @Failure 500 {object} models.ErrorResponse
+// @Router /posts [post]
 func (h *Handler) CreatePost(c *gin.Context) {
 	var req models.CreatePostRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -33,7 +42,7 @@ func (h *Handler) CreatePost(c *gin.Context) {
 	post := models.Post{
 		Title:   req.Title,
 		Content: req.Content,
-		Tags:    pq.StringArray(req.Tags),
+		Tags:    models.StringArray(req.Tags),
 	}
 
 	if err := tx.Create(&post).Error; err != nil {
@@ -67,6 +76,16 @@ func (h *Handler) CreatePost(c *gin.Context) {
 }
 
 // GetPost handles GET /posts/:id - Gets a post with Cache-Aside pattern
+// @Summary Get a specific blog post
+// @Description Retrieves a post by ID with Redis caching (5-minute TTL)
+// @Tags posts
+// @Accept json
+// @Produce json
+// @Param id path int true "Post ID"
+// @Success 200 {object} models.Post
+// @Failure 400 {object} models.ErrorResponse
+// @Failure 404 {object} models.ErrorResponse
+// @Router /posts/{id} [get]
 func (h *Handler) GetPost(c *gin.Context) {
 	idParam := c.Param("id")
 	id, err := strconv.ParseUint(idParam, 10, 32)
@@ -104,6 +123,17 @@ func (h *Handler) GetPost(c *gin.Context) {
 }
 
 // GetPostWithRelated handles GET /posts/:id/related - Gets a post with related posts
+// @Summary Get a post with related posts
+// @Description Retrieves a post by ID along with related posts based on tag similarity using Elasticsearch
+// @Tags posts
+// @Accept json
+// @Produce json
+// @Param id path int true "Post ID"
+// @Success 200 {object} models.PostWithRelated
+// @Failure 400 {object} models.ErrorResponse
+// @Failure 404 {object} models.ErrorResponse
+// @Failure 500 {object} models.ErrorResponse
+// @Router /posts/{id}/related [get]
 func (h *Handler) GetPostWithRelated(c *gin.Context) {
 	idParam := c.Param("id")
 	id, err := strconv.ParseUint(idParam, 10, 32)
@@ -135,6 +165,16 @@ func (h *Handler) GetPostWithRelated(c *gin.Context) {
 }
 
 // GetActivityLogs handles GET /activity-logs - Gets all activity logs with pagination
+// @Summary Get activity logs
+// @Description Retrieves all system activity logs with pagination support
+// @Tags activity-logs
+// @Accept json
+// @Produce json
+// @Param page query int false "Page number" default(1)
+// @Param limit query int false "Items per page" default(20)
+// @Success 200 {object} models.ActivityLogsResponse
+// @Failure 500 {object} models.ErrorResponse
+// @Router /activity-logs [get]
 func (h *Handler) GetActivityLogs(c *gin.Context) {
 	// Parse pagination parameters
 	pageStr := c.DefaultQuery("page", "1")
@@ -244,6 +284,18 @@ func (h *Handler) findRelatedPosts(post models.Post) ([]models.Post, error) {
 }
 
 // UpdatePost handles PUT /posts/:id - Updates a post with cache invalidation
+// @Summary Update a blog post
+// @Description Updates a post and invalidates the cache
+// @Tags posts
+// @Accept json
+// @Produce json
+// @Param id path int true "Post ID"
+// @Param post body models.UpdatePostRequest true "Post update request"
+// @Success 200 {object} models.Post
+// @Failure 400 {object} models.ErrorResponse
+// @Failure 404 {object} models.ErrorResponse
+// @Failure 500 {object} models.ErrorResponse
+// @Router /posts/{id} [put]
 func (h *Handler) UpdatePost(c *gin.Context) {
 	idParam := c.Param("id")
 	id, err := strconv.ParseUint(idParam, 10, 32)
@@ -273,7 +325,7 @@ func (h *Handler) UpdatePost(c *gin.Context) {
 		post.Content = req.Content
 	}
 	if req.Tags != nil {
-		post.Tags = pq.StringArray(req.Tags)
+		post.Tags = models.StringArray(req.Tags)
 	}
 
 	// Save to database
@@ -294,6 +346,16 @@ func (h *Handler) UpdatePost(c *gin.Context) {
 }
 
 // SearchPostsByTag handles GET /posts/search-by-tag?tag=<tag_name>
+// @Summary Search posts by tag
+// @Description Searches posts containing a specific tag using optimized GIN indexing
+// @Tags posts
+// @Accept json
+// @Produce json
+// @Param tag query string true "Tag name to search for"
+// @Success 200 {object} models.TagSearchResponse
+// @Failure 400 {object} models.ErrorResponse
+// @Failure 500 {object} models.ErrorResponse
+// @Router /posts/search-by-tag [get]
 func (h *Handler) SearchPostsByTag(c *gin.Context) {
 	tag := c.Query("tag")
 	if tag == "" {
@@ -316,6 +378,16 @@ func (h *Handler) SearchPostsByTag(c *gin.Context) {
 }
 
 // SearchPosts handles GET /posts/search?q=<query_string>
+// @Summary Full-text search posts
+// @Description Performs full-text search across post titles and content using Elasticsearch
+// @Tags posts
+// @Accept json
+// @Produce json
+// @Param q query string true "Search query string"
+// @Success 200 {object} models.SearchResponse
+// @Failure 400 {object} models.ErrorResponse
+// @Failure 500 {object} models.ErrorResponse
+// @Router /posts/search [get]
 func (h *Handler) SearchPosts(c *gin.Context) {
 	query := c.Query("q")
 	if query == "" {
@@ -357,6 +429,16 @@ func (h *Handler) SearchPosts(c *gin.Context) {
 }
 
 // GetAllPosts handles GET /posts - Gets all posts with pagination
+// @Summary Get all blog posts
+// @Description Retrieves all posts with pagination support
+// @Tags posts
+// @Accept json
+// @Produce json
+// @Param page query int false "Page number" default(1)
+// @Param limit query int false "Items per page" default(10)
+// @Success 200 {object} models.PostsResponse
+// @Failure 500 {object} models.ErrorResponse
+// @Router /posts [get]
 func (h *Handler) GetAllPosts(c *gin.Context) {
 	// Parse pagination parameters
 	pageStr := c.DefaultQuery("page", "1")
@@ -408,6 +490,17 @@ func (h *Handler) GetAllPosts(c *gin.Context) {
 }
 
 // DeletePost handles DELETE /posts/:id - Deletes a post with cache invalidation
+// @Summary Delete a blog post
+// @Description Deletes a post and cleans up related data with cache invalidation
+// @Tags posts
+// @Accept json
+// @Produce json
+// @Param id path int true "Post ID"
+// @Success 200 {object} models.SuccessResponse
+// @Failure 400 {object} models.ErrorResponse
+// @Failure 404 {object} models.ErrorResponse
+// @Failure 500 {object} models.ErrorResponse
+// @Router /posts/{id} [delete]
 func (h *Handler) DeletePost(c *gin.Context) {
 	idParam := c.Param("id")
 	id, err := strconv.ParseUint(idParam, 10, 32)

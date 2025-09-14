@@ -1,0 +1,485 @@
+basePath: /api/v1
+definitions:
+  models.ActivityLog:
+    properties:
+      action:
+        example: new_post
+        type: string
+      id:
+        example: 1
+        type: integer
+      logged_at:
+        example: "2023-09-14T08:04:38.522445Z"
+        type: string
+      post:
+        $ref: '#/definitions/models.Post'
+      post_id:
+        description: Changed to pointer to allow NULL values
+        example: 1
+        type: integer
+    type: object
+  models.ActivityLogsResponse:
+    properties:
+      logs:
+        items:
+          $ref: '#/definitions/models.ActivityLog'
+        type: array
+      pagination:
+        $ref: '#/definitions/models.PaginationResponse'
+    type: object
+  models.CreatePostRequest:
+    properties:
+      content:
+        example: This is the content of my first blog post.
+        type: string
+      tags:
+        example:
+        - golang
+        - programming
+        - tutorial
+        items:
+          type: string
+        type: array
+      title:
+        example: My First Blog Post
+        type: string
+    required:
+    - content
+    - title
+    type: object
+  models.ErrorResponse:
+    properties:
+      error:
+        example: Invalid input
+        type: string
+    type: object
+  models.PaginationResponse:
+    properties:
+      current_page:
+        example: 1
+        type: integer
+      has_next:
+        example: true
+        type: boolean
+      has_prev:
+        example: false
+        type: boolean
+      limit:
+        example: 10
+        type: integer
+      total_count:
+        example: 50
+        type: integer
+      total_pages:
+        example: 5
+        type: integer
+    type: object
+  models.Post:
+    properties:
+      content:
+        example: This is the content of my first blog post.
+        type: string
+      created_at:
+        example: "2023-09-14T08:04:38.522445Z"
+        type: string
+      id:
+        example: 1
+        type: integer
+      tags:
+        example:
+        - golang
+        - programming
+        - tutorial
+        items:
+          type: string
+        type: array
+      title:
+        example: My First Blog Post
+        type: string
+      updated_at:
+        example: "2023-09-14T08:04:38.522445Z"
+        type: string
+    type: object
+  models.PostSearchResult:
+    properties:
+      content:
+        example: This is the content of my first blog post.
+        type: string
+      id:
+        example: 1
+        type: integer
+      tags:
+        example:
+        - golang
+        - programming
+        - tutorial
+        items:
+          type: string
+        type: array
+      title:
+        example: My First Blog Post
+        type: string
+    type: object
+  models.PostWithRelated:
+    properties:
+      post:
+        $ref: '#/definitions/models.Post'
+      related_posts:
+        items:
+          $ref: '#/definitions/models.Post'
+        type: array
+    type: object
+  models.PostsResponse:
+    properties:
+      pagination:
+        $ref: '#/definitions/models.PaginationResponse'
+      posts:
+        items:
+          $ref: '#/definitions/models.Post'
+        type: array
+    type: object
+  models.SearchResponse:
+    properties:
+      posts:
+        items:
+          $ref: '#/definitions/models.PostSearchResult'
+        type: array
+      took:
+        example: 5
+        type: integer
+      total:
+        example: 25
+        type: integer
+    type: object
+  models.SuccessResponse:
+    properties:
+      message:
+        example: Operation completed successfully
+        type: string
+    type: object
+  models.TagSearchResponse:
+    properties:
+      count:
+        example: 10
+        type: integer
+      posts:
+        items:
+          $ref: '#/definitions/models.Post'
+        type: array
+    type: object
+  models.UpdatePostRequest:
+    properties:
+      content:
+        example: Updated content of the blog post.
+        type: string
+      tags:
+        example:
+        - golang
+        - programming
+        - updated
+        items:
+          type: string
+        type: array
+      title:
+        example: Updated Blog Post Title
+        type: string
+    type: object
+host: localhost:8080
+info:
+  contact:
+    email: support@swagger.io
+    name: API Support
+    url: http://www.swagger.io/support
+  description: A comprehensive blog API built with Golang, featuring PostgreSQL, Redis
+    caching, and Elasticsearch for full-text search.
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+  termsOfService: http://swagger.io/terms/
+  title: Blog API
+  version: "1.0"
+paths:
+  /activity-logs:
+    get:
+      consumes:
+      - application/json
+      description: Retrieves all system activity logs with pagination support
+      parameters:
+      - default: 1
+        description: Page number
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: Items per page
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.ActivityLogsResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      summary: Get activity logs
+      tags:
+      - activity-logs
+  /posts:
+    get:
+      consumes:
+      - application/json
+      description: Retrieves all posts with pagination support
+      parameters:
+      - default: 1
+        description: Page number
+        in: query
+        name: page
+        type: integer
+      - default: 10
+        description: Items per page
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.PostsResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      summary: Get all blog posts
+      tags:
+      - posts
+    post:
+      consumes:
+      - application/json
+      description: Create a new blog post with transaction support for data integrity
+      parameters:
+      - description: Post creation request
+        in: body
+        name: post
+        required: true
+        schema:
+          $ref: '#/definitions/models.CreatePostRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/models.Post'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      summary: Create a new blog post
+      tags:
+      - posts
+  /posts/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: Deletes a post and cleans up related data with cache invalidation
+      parameters:
+      - description: Post ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.SuccessResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      summary: Delete a blog post
+      tags:
+      - posts
+    get:
+      consumes:
+      - application/json
+      description: Retrieves a post by ID with Redis caching (5-minute TTL)
+      parameters:
+      - description: Post ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Post'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      summary: Get a specific blog post
+      tags:
+      - posts
+    put:
+      consumes:
+      - application/json
+      description: Updates a post and invalidates the cache
+      parameters:
+      - description: Post ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Post update request
+        in: body
+        name: post
+        required: true
+        schema:
+          $ref: '#/definitions/models.UpdatePostRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Post'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      summary: Update a blog post
+      tags:
+      - posts
+  /posts/{id}/related:
+    get:
+      consumes:
+      - application/json
+      description: Retrieves a post by ID along with related posts based on tag similarity
+        using Elasticsearch
+      parameters:
+      - description: Post ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.PostWithRelated'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      summary: Get a post with related posts
+      tags:
+      - posts
+  /posts/search:
+    get:
+      consumes:
+      - application/json
+      description: Performs full-text search across post titles and content using
+        Elasticsearch
+      parameters:
+      - description: Search query string
+        in: query
+        name: q
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.SearchResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      summary: Full-text search posts
+      tags:
+      - posts
+  /posts/search-by-tag:
+    get:
+      consumes:
+      - application/json
+      description: Searches posts containing a specific tag using optimized GIN indexing
+      parameters:
+      - description: Tag name to search for
+        in: query
+        name: tag
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.TagSearchResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      summary: Search posts by tag
+      tags:
+      - posts
+schemes:
+- http
+swagger: "2.0"

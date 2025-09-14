@@ -33,6 +33,13 @@ func SetupRoutes(router *gin.Engine, db *gorm.DB, redis *redis.Client, es *elast
 	}
 
 	// Health check
+	// @Summary Health Check
+	// @Description Get the health status of the API
+	// @Tags health
+	// @Accept json
+	// @Produce json
+	// @Success 200 {object} map[string]string
+	// @Router /health [get]
 	router.GET("/health", func(c *gin.Context) {
 		c.JSON(200, gin.H{
 			"status": "OK",
