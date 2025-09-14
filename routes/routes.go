@@ -19,11 +19,17 @@ func SetupRoutes(router *gin.Engine, db *gorm.DB, redis *redis.Client, es *elast
 		posts := api.Group("/posts")
 		{
 			posts.POST("", h.CreatePost)
+			posts.GET("", h.GetAllPosts)
 			posts.GET("/:id", h.GetPost)
+			posts.GET("/:id/related", h.GetPostWithRelated)
 			posts.PUT("/:id", h.UpdatePost)
+			posts.DELETE("/:id", h.DeletePost)
 			posts.GET("/search-by-tag", h.SearchPostsByTag)
 			posts.GET("/search", h.SearchPosts)
 		}
+
+		// Activity logs routes
+		api.GET("/activity-logs", h.GetActivityLogs)
 	}
 
 	// Health check

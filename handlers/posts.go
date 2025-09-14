@@ -45,7 +45,7 @@ func (h *Handler) CreatePost(c *gin.Context) {
 	// Create activity log
 	activityLog := models.ActivityLog{
 		Action: "new_post",
-		PostID: post.ID,
+		PostID: &post.ID,
 	}
 
 	if err := tx.Create(&activityLog).Error; err != nil {
@@ -101,6 +101,146 @@ func (h *Handler) GetPost(c *gin.Context) {
 	h.Redis.Set(ctx, cacheKey, postJSON, 5*time.Minute)
 
 	c.JSON(http.StatusOK, post)
+}
+
+// GetPostWithRelated handles GET /posts/:id/related - Gets a post with related posts
+func (h *Handler) GetPostWithRelated(c *gin.Context) {
+	idParam := c.Param("id")
+	id, err := strconv.ParseUint(idParam, 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid post ID"})
+		return
+	}
+
+	// Get the main post from database
+	var post models.Post
+	if err := h.DB.First(&post, id).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Post not found"})
+		return
+	}
+
+	// Find related posts using Elasticsearch
+	relatedPosts, err := h.findRelatedPosts(post)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to find related posts"})
+		return
+	}
+
+	result := models.PostWithRelated{
+		Post:         post,
+		RelatedPosts: relatedPosts,
+	}
+
+	c.JSON(http.StatusOK, result)
+}
+
+// GetActivityLogs handles GET /activity-logs - Gets all activity logs with pagination
+func (h *Handler) GetActivityLogs(c *gin.Context) {
+	// Parse pagination parameters
+	pageStr := c.DefaultQuery("page", "1")
+	limitStr := c.DefaultQuery("limit", "20")
+
+	page, err := strconv.Atoi(pageStr)
+	if err != nil || page < 1 {
+		page = 1
+	}
+
+	limit, err := strconv.Atoi(limitStr)
+	if err != nil || limit < 1 || limit > 100 {
+		limit = 20
+	}
+
+	offset := (page - 1) * limit
+
+	var logs []models.ActivityLog
+	var total int64
+	
+	// Get total count
+	if err := h.DB.Model(&models.ActivityLog{}).Count(&total).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to count activity logs"})
+		return
+	}
+
+	// Get logs with pagination, ordered by logged_at descending
+	if err := h.DB.Preload("Post").Order("logged_at DESC").Offset(offset).Limit(limit).Find(&logs).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch activity logs"})
+		return
+	}
+
+	// Calculate pagination info
+	totalPages := int((total + int64(limit) - 1) / int64(limit))
+	hasNext := page < totalPages
+	hasPrev := page > 1
+
+	c.JSON(http.StatusOK, gin.H{
+			"logs": logs,
+			"pagination": gin.H{
+				"current_page": page,
+				"total_pages":  totalPages,
+				"total_count":  total,
+				"limit":        limit,
+				"has_next":     hasNext,
+				"has_prev":     hasPrev,
+			},
+		})
+}
+
+// findRelatedPosts finds posts related to the given post based on tags using Elasticsearch
+func (h *Handler) findRelatedPosts(post models.Post) ([]models.Post, error) {
+	ctx := context.Background()
+
+	// If the post has no tags, return empty slice
+	if len(post.Tags) == 0 {
+		return []models.Post{}, nil
+	}
+
+	// Create a bool query with should clauses for each tag
+	boolQuery := elastic.NewBoolQuery()
+	
+	// Add should clauses for each tag (OR logic)
+	for _, tag := range post.Tags {
+		termQuery := elastic.NewTermQuery("tags", tag)
+		boolQuery = boolQuery.Should(termQuery)
+	}
+	
+	// Exclude the current post from results
+	boolQuery = boolQuery.MustNot(elastic.NewTermQuery("id", post.ID))
+	
+	// Set minimum should match to ensure at least one tag matches
+	boolQuery = boolQuery.MinimumShouldMatch("1")
+
+	// Execute the search
+	searchResult, err := h.ES.Search().
+		Index("posts").
+		Query(boolQuery).
+		Size(5). // Limit to 5 related posts
+		Do(ctx)
+
+	if err != nil {
+		return nil, fmt.Errorf("elasticsearch search failed: %v", err)
+	}
+
+	// Extract post IDs from search results
+	var postIDs []uint
+	for _, hit := range searchResult.Hits.Hits {
+		var searchPost models.PostSearchResult
+		if err := json.Unmarshal(hit.Source, &searchPost); err == nil {
+			postIDs = append(postIDs, searchPost.ID)
+		}
+	}
+
+	// If no related posts found, return empty slice
+	if len(postIDs) == 0 {
+		return []models.Post{}, nil
+	}
+
+	// Fetch full post data from database
+	var relatedPosts []models.Post
+	if err := h.DB.Where("id IN ?", postIDs).Find(&relatedPosts).Error; err != nil {
+		return nil, fmt.Errorf("database query failed: %v", err)
+	}
+
+	return relatedPosts, nil
 }
 
 // UpdatePost handles PUT /posts/:id - Updates a post with cache invalidation
@@ -216,6 +356,122 @@ func (h *Handler) SearchPosts(c *gin.Context) {
 	})
 }
 
+// GetAllPosts handles GET /posts - Gets all posts with pagination
+func (h *Handler) GetAllPosts(c *gin.Context) {
+	// Parse pagination parameters
+	pageStr := c.DefaultQuery("page", "1")
+	limitStr := c.DefaultQuery("limit", "10")
+
+	page, err := strconv.Atoi(pageStr)
+	if err != nil || page < 1 {
+		page = 1
+	}
+
+	limit, err := strconv.Atoi(limitStr)
+	if err != nil || limit < 1 || limit > 100 {
+		limit = 10
+	}
+
+	offset := (page - 1) * limit
+
+	var posts []models.Post
+	var total int64
+	
+	// Get total count
+	if err := h.DB.Model(&models.Post{}).Count(&total).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to count posts"})
+		return
+	}
+
+	// Get posts with pagination, ordered by created_at descending
+	if err := h.DB.Order("created_at DESC").Offset(offset).Limit(limit).Find(&posts).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch posts"})
+		return
+	}
+
+	// Calculate pagination info
+	totalPages := int((total + int64(limit) - 1) / int64(limit))
+	hasNext := page < totalPages
+	hasPrev := page > 1
+
+	c.JSON(http.StatusOK, gin.H{
+		"posts": posts,
+		"pagination": gin.H{
+			"current_page": page,
+			"total_pages":  totalPages,
+			"total_count":  total,
+			"limit":        limit,
+			"has_next":     hasNext,
+			"has_prev":     hasPrev,
+		},
+	})
+}
+
+// DeletePost handles DELETE /posts/:id - Deletes a post with cache invalidation
+func (h *Handler) DeletePost(c *gin.Context) {
+	idParam := c.Param("id")
+	id, err := strconv.ParseUint(idParam, 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid post ID"})
+		return
+	}
+
+	// Start transaction
+	tx := h.DB.Begin()
+	if tx.Error != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to start transaction"})
+		return
+	}
+
+	// Check if post exists
+	var post models.Post
+	if err := tx.First(&post, id).Error; err != nil {
+		tx.Rollback()
+		c.JSON(http.StatusNotFound, gin.H{"error": "Post not found"})
+		return
+	}
+
+	// Delete related activity logs first
+	if err := tx.Where("post_id = ?", id).Delete(&models.ActivityLog{}).Error; err != nil {
+		tx.Rollback()
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete activity logs"})
+		return
+	}
+
+	// Delete the post
+	if err := tx.Delete(&post).Error; err != nil {
+		tx.Rollback()
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete post"})
+		return
+	}
+
+	// Create deletion activity log AFTER deleting the post (with null PostID since post is gone)
+	if err := tx.Exec("INSERT INTO activity_logs (action, post_id) VALUES ($1, NULL)", "delete_post").Error; err != nil {
+		tx.Rollback()
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create activity log"})
+		return
+	}
+
+	// Commit transaction
+	if err := tx.Commit().Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to commit transaction"})
+		return
+	}
+
+	// Invalidate cache
+	ctx := context.Background()
+	cacheKey := fmt.Sprintf("post:%d", id)
+	h.Redis.Del(ctx, cacheKey)
+
+	// Delete from Elasticsearch
+	go h.deletePostFromES(uint(id))
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Post deleted successfully",
+		"id":      id,
+	})
+}
+
 // indexPostInES indexes a post in Elasticsearch
 func (h *Handler) indexPostInES(post models.Post) {
 	ctx := context.Background()
@@ -235,5 +491,19 @@ func (h *Handler) indexPostInES(post models.Post) {
 
 	if err != nil {
 		fmt.Printf("Failed to index post in Elasticsearch: %v\n", err)
+	}
+}
+
+// deletePostFromES deletes a post from Elasticsearch
+func (h *Handler) deletePostFromES(postID uint) {
+	ctx := context.Background()
+
+	_, err := h.ES.Delete().
+		Index("posts").
+		Id(fmt.Sprintf("%d", postID)).
+		Do(ctx)
+
+	if err != nil {
+		fmt.Printf("Failed to delete post from Elasticsearch: %v\n", err)
 	}
 }

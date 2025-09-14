@@ -18,7 +18,7 @@ type Post struct {
 type ActivityLog struct {
 	ID       uint      `json:"id" gorm:"primaryKey"`
 	Action   string    `json:"action" gorm:"not null"`
-	PostID   uint      `json:"post_id"`
+	PostID   *uint     `json:"post_id"` // Changed to pointer to allow NULL values
 	Post     Post      `json:"post" gorm:"foreignKey:PostID"`
 	LoggedAt time.Time `json:"logged_at"`
 }

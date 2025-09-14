@@ -59,6 +59,7 @@ docker exec blog_redis redis-cli ping
 ### Base URL: `http://localhost:8080/api/v1`
 
 ### 1. Create Post (with Transaction)
+
 Creates a new post and logs the activity in a single transaction.
 
 ```bash
@@ -72,6 +73,7 @@ curl -X POST http://localhost:8080/api/v1/posts \
 ```
 
 ### 2. Get Post (with Cache-Aside)
+
 Retrieves a post by ID with Redis caching (5-minute TTL).
 
 ```bash
@@ -79,6 +81,7 @@ curl http://localhost:8080/api/v1/posts/1
 ```
 
 ### 3. Update Post (with Cache Invalidation)
+
 Updates a post and invalidates the cache.
 
 ```bash
@@ -92,6 +95,7 @@ curl -X PUT http://localhost:8080/api/v1/posts/1 \
 ```
 
 ### 4. Search Posts by Tag (PostgreSQL GIN Index)
+
 Searches posts containing a specific tag using optimized GIN indexing.
 
 ```bash
@@ -99,6 +103,7 @@ curl "http://localhost:8080/api/v1/posts/search-by-tag?tag=golang"
 ```
 
 ### 5. Full-text Search (Elasticsearch)
+
 Performs full-text search across post titles and content.
 
 ```bash
@@ -108,6 +113,7 @@ curl "http://localhost:8080/api/v1/posts/search?q=technology"
 ## Testing the Implementation
 
 ### 1. Test Database Transaction
+
 ```bash
 # Create a post - this should create both post and activity log
 curl -X POST http://localhost:8080/api/v1/posts \
@@ -123,6 +129,7 @@ docker exec blog_postgres psql -U blog_user -d blog_db -c "SELECT * FROM posts; 
 ```
 
 ### 2. Test Cache-Aside Pattern
+
 ```bash
 # First request - cache miss (slower)
 time curl http://localhost:8080/api/v1/posts/1
@@ -135,6 +142,7 @@ docker exec blog_redis redis-cli get "post:1"
 ```
 
 ### 3. Test Cache Invalidation
+
 ```bash
 # Get post (to cache it)
 curl http://localhost:8080/api/v1/posts/1
@@ -152,6 +160,7 @@ docker exec blog_redis redis-cli get "post:1"
 ```
 
 ### 4. Test GIN Index Performance
+
 ```bash
 # Create multiple posts with tags
 for i in {1..5}; do
@@ -169,6 +178,7 @@ curl "http://localhost:8080/api/v1/posts/search-by-tag?tag=common"
 ```
 
 ### 5. Test Elasticsearch Full-text Search
+
 ```bash
 # Create posts with different content
 curl -X POST http://localhost:8080/api/v1/posts \
@@ -191,6 +201,7 @@ curl "http://localhost:8080/api/v1/posts/search?q=performance"
 ## Database Schema
 
 ### Posts Table
+
 ```sql
 CREATE TABLE posts (
     id SERIAL PRIMARY KEY,
@@ -206,6 +217,7 @@ CREATE INDEX idx_posts_tags ON posts USING GIN(tags);
 ```
 
 ### Activity Logs Table
+
 ```sql
 CREATE TABLE activity_logs (
     id SERIAL PRIMARY KEY,
@@ -226,6 +238,7 @@ CREATE TABLE activity_logs (
 ## Development
 
 ### Local Development Setup
+
 ```bash
 # Install dependencies
 go mod download
@@ -235,6 +248,7 @@ go run main.go
 ```
 
 ### Environment Variables
+
 - `DB_HOST`: PostgreSQL host (default: localhost)
 - `DB_PORT`: PostgreSQL port (default: 5432)
 - `DB_USER`: PostgreSQL user (default: blog_user)
@@ -247,6 +261,7 @@ go run main.go
 - `PORT`: API server port (default: 8080)
 
 ## Project Structure
+
 ```
 ├── main.go                 # Application entry point
 ├── docker-compose.yml      # Docker services configuration
@@ -275,6 +290,7 @@ go run main.go
 4. **Database connection issues**: Verify PostgreSQL is ready with `docker-compose logs postgres`
 
 ### Logs
+
 ```bash
 # View all service logs
 docker-compose logs
@@ -289,6 +305,7 @@ docker-compose logs elasticsearch
 ## Next Steps (Bonus Features)
 
 The project is ready for implementing the bonus "Related Posts" feature:
+
 - Elasticsearch bool queries with should clauses
 - Tag-based similarity matching
 - Exclusion of the current post from results
